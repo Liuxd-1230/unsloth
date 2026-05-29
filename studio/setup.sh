@@ -1154,6 +1154,20 @@ else
                 fi
             }
 
+            # Map an install_llama_prebuilt.py --smoke-test exit code to a
+            # decision token. 2 (EXIT_FALLBACK) = definitively GPU-intended but
+            # CPU-only -> rebuild CPU; 0 = offload confirmed; anything else
+            # (1/EXIT_ERROR, signals) = inconclusive -> keep the GPU build
+            # rather than downgrade on uncertain evidence. Tiny + side-effect
+            # free so tests/sh/test_llama_gpu_smoke.sh can exercise it.
+            _classify_smoke_exit() {
+                case "$1" in
+                    0) echo "ok" ;;
+                    2) echo "cpu_only" ;;
+                    *) echo "inconclusive" ;;
+                esac
+            }
+
             if ! run_quiet_no_exit "cmake llama.cpp" cmake $CMAKE_GENERATOR_ARGS -S "$_BUILD_TMP" -B "$_BUILD_TMP/build" $CMAKE_ARGS; then
                 _FB_LABEL="$(_gpu_fallback_label)"
                 if [ -n "$_FB_LABEL" ]; then
@@ -1191,6 +1205,40 @@ else
                 else
                     BUILD_OK=false
                 fi
+            fi
+        fi
+
+        # Post-build GPU smoke test (#5807 / #5854): a GPU build whose runtime
+        # backend fails to initialize still links and serves HTTP 200, but only
+        # from CPU. Confirm the fresh binary actually offloads to the GPU; if it
+        # ran on CPU only (exit 2 / EXIT_FALLBACK), retry a CPU build so the
+        # user gets a working (if slower) llama-server instead of a silently
+        # CPU-only "GPU" build. An inconclusive result (exit 1: probe download
+        # or server start failed) keeps the GPU build rather than downgrading on
+        # uncertain evidence. _gpu_fallback_label is empty for a pure CPU build.
+        if [ "$BUILD_OK" = true ]; then
+            _SMOKE_LABEL="$(_gpu_fallback_label)"
+            if [ -n "$_SMOKE_LABEL" ] && [ -f "$_BUILD_TMP/build/bin/llama-server" ]; then
+                python "$SCRIPT_DIR/install_llama_prebuilt.py" \
+                    --smoke-test "$_BUILD_TMP/build/bin/llama-server" \
+                    --install-dir "$_BUILD_TMP" > "$_BUILD_TMP/gpu-smoke.log" 2>&1
+                _SMOKE_RC=$?
+                case "$(_classify_smoke_exit "$_SMOKE_RC")" in
+                    cpu_only)
+                        substep "$_SMOKE_LABEL build runs on CPU only; retrying CPU build..." "$C_WARN"
+                        rm -rf "$_BUILD_TMP/build"
+                        if run_quiet_no_exit "cmake llama.cpp (cpu fallback)" cmake $CMAKE_GENERATOR_ARGS -S "$_BUILD_TMP" -B "$_BUILD_TMP/build" $CPU_FALLBACK_CMAKE_ARGS; then
+                            _BUILD_DESC="building (CPU fallback after $_SMOKE_LABEL smoke test ran on CPU)"
+                            GPU_BACKEND=""
+                            run_quiet_no_exit "build llama-server (cpu fallback)" cmake --build "$_BUILD_TMP/build" --config Release --target llama-server -j"$NCPU" || BUILD_OK=false
+                        else
+                            BUILD_OK=false
+                        fi
+                        ;;
+                    inconclusive)
+                        substep "GPU smoke test inconclusive (exit $_SMOKE_RC); keeping $_SMOKE_LABEL build" "$C_WARN"
+                        ;;
+                esac
             fi
         fi
 
