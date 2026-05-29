@@ -41,13 +41,20 @@ HostInfo = M.HostInfo
 
 def nvidia_host(**overrides) -> HostInfo:
     defaults = dict(
-        system = "Linux", machine = "x86_64",
-        is_windows = False, is_linux = True, is_macos = False,
-        is_x86_64 = True, is_arm64 = False,
+        system = "Linux",
+        machine = "x86_64",
+        is_windows = False,
+        is_linux = True,
+        is_macos = False,
+        is_x86_64 = True,
+        is_arm64 = False,
         nvidia_smi = "/usr/bin/nvidia-smi",
-        driver_cuda_version = (13, 0), compute_caps = ["120"],
+        driver_cuda_version = (13, 0),
+        compute_caps = ["120"],
         visible_cuda_devices = None,
-        has_physical_nvidia = True, has_usable_nvidia = True, has_rocm = False,
+        has_physical_nvidia = True,
+        has_usable_nvidia = True,
+        has_rocm = False,
     )
     defaults.update(overrides)
     return HostInfo(**defaults)
@@ -55,27 +62,42 @@ def nvidia_host(**overrides) -> HostInfo:
 
 def windows_nvidia_host(**overrides) -> HostInfo:
     return nvidia_host(
-        system = "Windows", is_windows = True, is_linux = False,
-        nvidia_smi = "nvidia-smi", **overrides
+        system = "Windows",
+        is_windows = True,
+        is_linux = False,
+        nvidia_smi = "nvidia-smi",
+        **overrides,
     )
 
 
 def rocm_host(**overrides) -> HostInfo:
     return nvidia_host(
-        nvidia_smi = None, driver_cuda_version = None, compute_caps = [],
-        has_physical_nvidia = False, has_usable_nvidia = False, has_rocm = True,
+        nvidia_smi = None,
+        driver_cuda_version = None,
+        compute_caps = [],
+        has_physical_nvidia = False,
+        has_usable_nvidia = False,
+        has_rocm = True,
         **overrides,
     )
 
 
 def macos_arm_host(**overrides) -> HostInfo:
     defaults = dict(
-        system = "Darwin", machine = "arm64",
-        is_windows = False, is_linux = False, is_macos = True,
-        is_x86_64 = False, is_arm64 = True,
-        nvidia_smi = None, driver_cuda_version = None, compute_caps = [],
+        system = "Darwin",
+        machine = "arm64",
+        is_windows = False,
+        is_linux = False,
+        is_macos = True,
+        is_x86_64 = False,
+        is_arm64 = True,
+        nvidia_smi = None,
+        driver_cuda_version = None,
+        compute_caps = [],
         visible_cuda_devices = None,
-        has_physical_nvidia = False, has_usable_nvidia = False, has_rocm = False,
+        has_physical_nvidia = False,
+        has_usable_nvidia = False,
+        has_rocm = False,
     )
     defaults.update(overrides)
     return HostInfo(**defaults)
@@ -83,8 +105,12 @@ def macos_arm_host(**overrides) -> HostInfo:
 
 def cpu_host(**overrides) -> HostInfo:
     return nvidia_host(
-        nvidia_smi = None, driver_cuda_version = None, compute_caps = [],
-        has_physical_nvidia = False, has_usable_nvidia = False, has_rocm = False,
+        nvidia_smi = None,
+        driver_cuda_version = None,
+        compute_caps = [],
+        has_physical_nvidia = False,
+        has_usable_nvidia = False,
+        has_rocm = False,
         **overrides,
     )
 
@@ -271,9 +297,7 @@ def patched_server(monkeypatch):
     monkeypatch.setattr(M, "free_local_port", lambda: 18000)
     monkeypatch.setattr(M, "binary_env", lambda *a, **k: {})
     monkeypatch.setattr(M.time, "sleep", lambda *a, **k: None)
-    monkeypatch.setattr(
-        M.urllib.request, "urlopen", lambda *a, **k: _FakeResponse(200)
-    )
+    monkeypatch.setattr(M.urllib.request, "urlopen", lambda *a, **k: _FakeResponse(200))
 
     def configure(log_text):
         monkeypatch.setattr(M.subprocess, "Popen", _FakeProc(log_text))
@@ -286,9 +310,7 @@ def _run_validate(tmp_path, host, install_kind):
     server.write_text("#!/bin/sh\n")
     probe = tmp_path / "probe.gguf"
     probe.write_bytes(b"GGUF")
-    validate_server(
-        server, probe, host, tmp_path, install_kind = install_kind
-    )
+    validate_server(server, probe, host, tmp_path, install_kind = install_kind)
 
 
 def test_gpu_intent_cpu_only_rejected(patched_server, tmp_path):
@@ -365,7 +387,9 @@ def test_smoke_test_propagates_failure(monkeypatch, tmp_path):
     monkeypatch.setattr(M, "validate_server", fake_validate)
     with pytest.raises(PrebuiltFallback):
         smoke_test_server_binary(
-            str(server), nvidia_host(), install_dir = str(tmp_path),
+            str(server),
+            nvidia_host(),
+            install_dir = str(tmp_path),
             probe = str(probe),
         )
 
@@ -378,7 +402,9 @@ def test_smoke_test_propagates_failure(monkeypatch, tmp_path):
 def _run_main_smoke(monkeypatch, smoke_impl):
     monkeypatch.setattr(M, "detect_host", lambda: nvidia_host())
     monkeypatch.setattr(M, "smoke_test_server_binary", smoke_impl)
-    monkeypatch.setattr(sys, "argv", ["install_llama_prebuilt.py", "--smoke-test", "/x/llama-server"])
+    monkeypatch.setattr(
+        sys, "argv", ["install_llama_prebuilt.py", "--smoke-test", "/x/llama-server"]
+    )
     return M.main()
 
 

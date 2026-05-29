@@ -335,7 +335,6 @@ class GpuOffloadFailure(PrebuiltFallback):
     --smoke-test CLI can tell this apart from an inconclusive start/serve
     failure (definite CPU-only -> EXIT_FALLBACK; inconclusive -> EXIT_ERROR)."""
 
-    pass
 
 
 class BusyInstallConflict(RuntimeError):
@@ -4689,7 +4688,16 @@ _DEVICE_ROW_RE = re.compile(
     r"-\s*(?P<dev>(?:CUDA|ROCm|ROCM|HIP|Metal|Vulkan|SYCL|OpenCL|MUSA|CANN|CPU)\w*)\s*:",
     re.IGNORECASE,
 )
-_GPU_DEVICE_PREFIXES = ("cuda", "rocm", "hip", "metal", "vulkan", "sycl", "musa", "cann")
+_GPU_DEVICE_PREFIXES = (
+    "cuda",
+    "rocm",
+    "hip",
+    "metal",
+    "vulkan",
+    "sycl",
+    "musa",
+    "cann",
+)
 
 # "load_tensors: offloaded 33/33 layers to GPU" (or "offloading ... to GPU").
 _OFFLOADED_LAYERS_RE = re.compile(
@@ -5851,19 +5859,18 @@ def smoke_test_server_binary(
             f"smoke-test: llama-server binary not found at {server_path}"
         )
     resolved_install_dir = (
-        Path(install_dir).expanduser().resolve()
-        if install_dir
-        else server_path.parent
+        Path(install_dir).expanduser().resolve() if install_dir else server_path.parent
     )
     resolved_kind = install_kind or resolve_smoke_test_install_kind(host)
     if probe:
         probe_path = Path(probe).expanduser().resolve()
         if not probe_path.exists():
-            raise PrebuiltFallback(
-                f"smoke-test: probe model not found at {probe_path}"
-            )
+            raise PrebuiltFallback(f"smoke-test: probe model not found at {probe_path}")
         validate_server(
-            server_path, probe_path, host, resolved_install_dir,
+            server_path,
+            probe_path,
+            host,
+            resolved_install_dir,
             install_kind = resolved_kind,
         )
     else:
@@ -5873,7 +5880,10 @@ def smoke_test_server_binary(
                 probe_path, validation_model_cache_path(resolved_install_dir)
             )
             validate_server(
-                server_path, probe_path, host, resolved_install_dir,
+                server_path,
+                probe_path,
+                host,
+                resolved_install_dir,
                 install_kind = resolved_kind,
             )
     return resolved_kind
