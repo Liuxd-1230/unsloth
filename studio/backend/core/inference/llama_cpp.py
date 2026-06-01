@@ -125,7 +125,7 @@ _SWA_CACHE: Optional[dict] = None
 _SWA_CACHE_LOCK = threading.Lock()
 
 
-def _probe_dns_dead(host: str = "huggingface.co", timeout: float = 2.0) -> bool:
+def _probe_dns_dead(host: str = "hf-mirror.com", timeout: float = 2.0) -> bool:
     """Quick DNS check. Runs on a daemon thread so concurrent sockets
     in the same process are not affected by socket.setdefaulttimeout."""
     result: list[Optional[bool]] = [None]
@@ -147,7 +147,7 @@ def _probe_dns_dead(host: str = "huggingface.co", timeout: float = 2.0) -> bool:
 @contextlib.contextmanager
 def _hf_offline_if_dns_dead():
     """Set HF_HUB_OFFLINE for the body of this block only when DNS to
-    huggingface.co fails. Restores the env on exit so a transient
+    hf-mirror.com fails. Restores the env on exit so a transient
     resolver hiccup at the start of one load can't quarantine the whole
     process. Respects an explicit user setting (no-op if already set)."""
     if "HF_HUB_OFFLINE" in os.environ:
@@ -161,7 +161,7 @@ def _hf_offline_if_dns_dead():
     os.environ["HF_HUB_OFFLINE"] = "1"
     if not transformers_was_set:
         os.environ["TRANSFORMERS_OFFLINE"] = "1"
-    logger.warning("huggingface.co unreachable; using local HF cache for this load.")
+    logger.warning("hf-mirror.com unreachable; using local HF cache for this load.")
     try:
         yield True
     finally:
@@ -368,10 +368,19 @@ def _resolve_swa_pattern(
 
 
 def _hf_repo_from_url(url: Optional[str]) -> Optional[str]:
-    """Strip `https://huggingface.co/owner/name(/...)` to `owner/name`."""
-    if not url or "huggingface.co/" not in url:
+    """Strip `https://huggingface.co/owner/name(/...)` or
+    `https://hf-mirror.com/owner/name(/...)` to `owner/name`."""
+    _HF_HOSTS = ("huggingface.co/", "hf-mirror.com/")
+    if not url:
         return None
-    tail = url.split("huggingface.co/", 1)[1].rstrip("/")
+    host = None
+    for h in _HF_HOSTS:
+        if h in url:
+            host = h
+            break
+    if host is None:
+        return None
+    tail = url.split(host, 1)[1].rstrip("/")
     parts = tail.split("/")
     if len(parts) < 2:
         return None

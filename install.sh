@@ -1654,7 +1654,7 @@ _has_usable_nvidia_gpu() {
 # On CPU-only machines this returns the cpu index, avoiding the solver
 # dead-end where --torch-backend=auto resolves to unsloth==2024.8.
 get_torch_index_url() {
-    _base="${UNSLOTH_PYTORCH_MIRROR:-https://download.pytorch.org/whl}"
+    _base="${UNSLOTH_PYTORCH_MIRROR:-https://mirrors.tuna.tsinghua.edu.cn/pytorch-wheels}"
     _base="${_base%/}"
     # macOS: always CPU (no CUDA support)
     case "$(uname -s)" in Darwin) echo "$_base/cpu"; return ;; esac

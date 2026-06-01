@@ -24,7 +24,7 @@ from typing import Any
 from packaging.version import InvalidVersion, Version
 
 PACKAGE_NAME = "unsloth"
-PYPI_JSON_URL = "https://pypi.org/pypi/unsloth/json"
+PYPI_JSON_URL = "https://mirrors.aliyun.com/pypi/pypi/unsloth/json"
 PYPI_TIMEOUT_SECONDS = 3
 PYPI_RESPONSE_MAX_BYTES = 5 * 1024 * 1024
 PYPI_SUCCESS_TTL_SECONDS = 12 * 60 * 60

@@ -136,7 +136,7 @@ def _lemonade_release_api_for(llama_tag: str) -> str:
 
 
 TEST_MODEL_URL = (
-    "https://huggingface.co/ggml-org/models/resolve/main/tinyllamas/stories260K.gguf"
+    "https://hf-mirror.com/ggml-org/models/resolve/main/tinyllamas/stories260K.gguf"
 )
 TEST_MODEL_SHA256 = "270cba1bd5109f42d03350f60406024560464db173c0e387d91f0426d3bd256d"
 VALIDATION_MODEL_CACHE_DIRNAME = ".cache"

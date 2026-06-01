@@ -1429,7 +1429,7 @@ def _pip_download_env() -> dict[str, str]:
     # Drop any user override.
     for key in [k for k in env if k.startswith("PIP_")]:
         env.pop(key, None)
-    env["PIP_INDEX_URL"] = "https://pypi.org/simple"
+    env["PIP_INDEX_URL"] = "https://mirrors.aliyun.com/pypi/simple"
     env["PIP_EXTRA_INDEX_URL"] = ""
     env["PIP_CONFIG_FILE"] = "/dev/null"
     env["PIP_DISABLE_PIP_VERSION_CHECK"] = "1"
@@ -1442,7 +1442,7 @@ def _pip_download_env() -> dict[str, str]:
 # setup.py at all because of `--only-binary :all:`.
 _PIP_DOWNLOAD_PIN_FLAGS = [
     "--index-url",
-    "https://pypi.org/simple",
+    "https://mirrors.aliyun.com/pypi/simple",
     "--only-binary",
     ":all:",
 ]
@@ -1752,7 +1752,7 @@ def fetch_pypi_versions(name: str) -> list[str]:
 
     Returns versions sorted ascending by version_sort_key.
     """
-    url = f"https://pypi.org/pypi/{name}/json"
+    url = f"https://mirrors.aliyun.com/pypi/pypi/{name}/json"
     try:
         req = urllib.request.Request(url, headers = {"Accept": "application/json"})
         with urllib.request.urlopen(req, timeout = 30) as resp:

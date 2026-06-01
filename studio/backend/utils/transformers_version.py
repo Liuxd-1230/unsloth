@@ -259,7 +259,7 @@ def _check_tokenizer_config_needs_v5(model_name: str) -> bool:
     # --- Fall back to fetching from HuggingFace ----------------------------
     import urllib.request
 
-    url = f"https://huggingface.co/{model_name}/raw/main/tokenizer_config.json"
+    url = f"https://hf-mirror.com/{model_name}/raw/main/tokenizer_config.json"
     try:
         req = urllib.request.Request(url, headers = {"User-Agent": "unsloth-studio"})
         with urllib.request.urlopen(req, timeout = 10) as resp:
@@ -330,7 +330,7 @@ def _check_config_needs_550(model_name: str) -> bool:
     # --- Fall back to fetching from HuggingFace ---------------------------
     import urllib.request
 
-    url = f"https://huggingface.co/{model_name}/raw/main/config.json"
+    url = f"https://hf-mirror.com/{model_name}/raw/main/config.json"
     try:
         req = urllib.request.Request(url, headers = {"User-Agent": "unsloth-studio"})
         with urllib.request.urlopen(req, timeout = 10) as resp:

@@ -227,7 +227,7 @@ PROVIDER_REGISTRY: dict[str, dict[str, Any]] = {
     },
     "huggingface": {
         "display_name": "Hugging Face",
-        "base_url": "https://router.huggingface.co/v1",
+        "base_url": "https://hf-mirror.com/v1",
         # Seed the picker with a few popular ids so something is selectable
         # before the live /v1/models call resolves. The remote listing is
         # the source of truth — see model_list_mode below.

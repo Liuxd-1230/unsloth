@@ -82,7 +82,7 @@ _ROCM_TORCH_PKG_SPECS: dict[str, tuple[str, str, str]] = {
     ),
 }
 _PYTORCH_WHL_BASE = (
-    os.environ.get("UNSLOTH_PYTORCH_MIRROR") or "https://download.pytorch.org/whl"
+    os.environ.get("UNSLOTH_PYTORCH_MIRROR") or "https://mirrors.tuna.tsinghua.edu.cn/pytorch-wheels"
 ).rstrip("/")
 
 # AMD Windows ROCm wheels — repo.amd.com (arch-specific pip index)

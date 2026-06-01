@@ -1,3 +1,33 @@
+# 🇨🇳 Unsloth CN — 国内优化版
+
+> **本仓库是国内网络环境优化版**，所有依赖使用国内镜像源，开箱即用。
+
+## 快速启动
+
+```bash
+# 加载国内镜像配置并启动 Unsloth Studio
+source .env.china && unsloth studio -p 8888
+```
+
+或使用启动脚本：
+
+```bash
+./start-cn.sh
+```
+
+## 国内镜像配置 (.env.china)
+
+| 环境变量 | 镜像地址 | 用途 |
+|---------|---------|------|
+| `HF_ENDPOINT` | hf-mirror.com | HuggingFace 模型下载 |
+| `UNSLOTH_PYTORCH_MIRROR` | 清华 PyTorch wheels | PyTorch 依赖 |
+| `PIP_INDEX_URL` | 阿里云 PyPI | pip 包安装 |
+| `PIP_TRUSTED_HOST` | 阿里云 | pip 信任主机 |
+
+---
+
+<hr>
+
 <h1 align="center" style="margin:0;">
   <a href="https://unsloth.ai/docs"><picture>
     <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/unslothai/unsloth/main/images/unsloth%20logo%20white%20text.png">

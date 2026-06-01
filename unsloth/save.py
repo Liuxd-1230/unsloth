@@ -553,7 +553,7 @@ def unsloth_save_model(
         except:
             raise RuntimeError(
                 "Unsloth: Please supply a token!\n"
-                "Go to https://huggingface.co/settings/tokens"
+                "Go to https://hf-mirror.com/settings/tokens"
             )
 
     assert maximum_memory_usage > 0 and maximum_memory_usage <= 0.95
@@ -600,7 +600,7 @@ def unsloth_save_model(
         if token is None:
             raise RuntimeError(
                 "Unsloth: Pushing to HF requires a token. Pass `token = 'hf_....'`\n"
-                "Go to https://huggingface.co/settings/tokens."
+                "Go to https://hf-mirror.com/settings/tokens."
             )
 
         if save_method == "lora":
@@ -661,7 +661,7 @@ def unsloth_save_model(
 
         if hasattr(model, "config"):
             print(
-                f"Saved {save_method} model to https://huggingface.co/" + save_directory
+                f"Saved {save_method} model to https://hf-mirror.com/" + save_directory
             )
         return save_directory, None
 
@@ -765,7 +765,7 @@ def unsloth_save_model(
 
         if push_to_hub and hasattr(model, "config"):
             print(
-                "Saved to https://huggingface.co/"
+                "Saved to https://hf-mirror.com/"
                 + save_pretrained_settings["save_directory"]
             )
 
@@ -1100,7 +1100,7 @@ def unsloth_save_model(
 
     if push_to_hub and hasattr(model, "config"):
         print(
-            f"Saved merged model to https://huggingface.co/{username}/{save_directory.lstrip('/').split('/')[-1]}"
+            f"Saved merged model to https://hf-mirror.com/{username}/{save_directory.lstrip('/').split('/')[-1]}"
         )
 
     save_pretrained_settings["state_dict"] = None
@@ -2714,7 +2714,7 @@ This model was finetuned and converted to GGUF format using [Unsloth](https://gi
         )
 
         print(
-            f"Unsloth: Successfully uploaded GGUF to https://huggingface.co/{full_repo_id}"
+            f"Unsloth: Successfully uploaded GGUF to https://hf-mirror.com/{full_repo_id}"
         )
 
         # Add tags
@@ -2863,7 +2863,7 @@ def unsloth_convert_lora_to_ggml_and_push_to_hub(
     )
     link = f"{repo_id.lstrip('/')}"
     print("Unsloth: Done.")
-    print(f"Converted LoRA to GGML and uploaded to https://huggingface.co/{link}")
+    print(f"Converted LoRA to GGML and uploaded to https://hf-mirror.com/{link}")
     print(
         "\nThis GGML making function was made by Maheswar. Ping him @Maheswar on the Unsloth Discord or on HuggingFace (@mahiatlinux) if you like this!"
     )
@@ -3550,7 +3550,7 @@ def patch_saving_functions(model, vision = False):
     pass
 
     if hasattr(self, "config"):
-        print("Saved model to https://huggingface.co/" + arguments["repo_id"])
+        print("Saved model to https://hf-mirror.com/" + arguments["repo_id"])
     pass
     '''
     exec(push_to_hub_text, globals())

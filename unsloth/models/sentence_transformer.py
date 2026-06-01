@@ -288,7 +288,7 @@ def _save_pretrained_gguf(
                 repo_id = repo_id,
                 commit_message = "Upload GGUF and SentenceTransformer model",
             )
-            print(f"Unsloth: Uploaded to https://huggingface.co/{repo_id}")
+            print(f"Unsloth: Uploaded to https://hf-mirror.com/{repo_id}")
         except Exception as e:
             print(f"Unsloth: Upload failed: {e}")
 
@@ -412,7 +412,7 @@ def _push_to_hub_gguf(
         is_vlm = result.get("is_vlm", False)
         fix_bos_token = result.get("fix_bos_token", False)
 
-        print(f"Unsloth: Uploading GGUF to https://huggingface.co/{full_repo_id}...")
+        print(f"Unsloth: Uploading GGUF to https://hf-mirror.com/{full_repo_id}...")
 
         # Upload GGUF files
         for file_location in gguf_files:
@@ -521,7 +521,7 @@ This sentence-transformers model was finetuned and converted to GGUF format usin
         pass
 
     print(
-        f"Unsloth: Successfully uploaded GGUF to https://huggingface.co/{full_repo_id}"
+        f"Unsloth: Successfully uploaded GGUF to https://hf-mirror.com/{full_repo_id}"
     )
     return full_repo_id
 
@@ -1746,7 +1746,7 @@ class FastSentenceTransformer(FastModel):
                             "commit_message", "Upload model"
                         ),
                     )
-                print(f"Unsloth: Pushed to https://huggingface.co/{repo_id}")
+                print(f"Unsloth: Pushed to https://hf-mirror.com/{repo_id}")
 
             st_model.push_to_hub_merged = types.MethodType(
                 _push_to_hub_merged, st_model
@@ -1959,7 +1959,7 @@ class FastSentenceTransformer(FastModel):
                     commit_message = commit_message,
                 )
             print(
-                f"Unsloth: Successfully pushed merged model to https://huggingface.co/{repo_id}"
+                f"Unsloth: Successfully pushed merged model to https://hf-mirror.com/{repo_id}"
             )
 
         st_model.push_to_hub_merged = types.MethodType(_push_to_hub_merged, st_model)

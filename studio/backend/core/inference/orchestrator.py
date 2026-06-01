@@ -127,7 +127,7 @@ class InferenceOrchestrator:
             import httpx
 
             resp = httpx.get(
-                "https://huggingface.co/api/models",
+                "https://hf-mirror.com/api/models",
                 params = {
                     "author": "unsloth",
                     "sort": "downloads",

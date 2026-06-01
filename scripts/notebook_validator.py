@@ -408,7 +408,7 @@ def pypi_metadata(name: str, version: str) -> dict[str, Any] | None:
             return json.loads(path.read_text())
         except json.JSONDecodeError:
             pass
-    url = f"https://pypi.org/pypi/{name}/{version}/json"
+    url = f"https://mirrors.aliyun.com/pypi/pypi/{name}/{version}/json"
     try:
         with urllib.request.urlopen(url, timeout = 10) as r:
             data = json.loads(r.read())
