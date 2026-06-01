@@ -214,7 +214,8 @@ export function providerSupportsBuiltinWebSearch(
     providerType === "openai" ||
     providerType === "anthropic" ||
     providerType === "openrouter" ||
-    providerType === "kimi"
+    providerType === "kimi" ||
+    providerType === "deepseek"
   );
 }
 
@@ -353,6 +354,8 @@ export function providerSupportsBuiltinCodeExecution(
     if (isGeminiImageModel(normalized)) return false;
     return normalized.startsWith("gemini-");
   }
+  // DeepSeek: backend executes code via execute_tool() locally
+  if (providerType === "deepseek") return true;
   return false;
 }
 
@@ -950,6 +953,7 @@ export function getExternalReasoningCapabilities(
   const isKimiProvider = normalizedProvider === "kimi";
   const isMistralProvider = normalizedProvider === "mistral";
   const isOpenRouterProvider = normalizedProvider === "openrouter";
+  const isDeepSeekProvider = normalizedProvider === "deepseek";
   if (isOpenRouterProvider) {
     // OpenRouter's unified `reasoning` parameter is accepted on every
     // chat-completion request; the gateway silently no-ops for models
@@ -965,6 +969,16 @@ export function getExternalReasoningCapabilities(
   }
   if (isKimiProvider) return resolveKimiReasoningCapabilities(modelForMatching);
   if (isMistralProvider) return resolveMistralReasoningCapabilities(modelForMatching);
+  // DeepSeek: supports thinking via `thinking` field + `reasoning_effort`
+  if (isDeepSeekProvider) {
+    return {
+      supportsReasoning: true,
+      reasoningStyle: "reasoning_effort" as const,
+      reasoningAlwaysOn: false,
+      supportsReasoningOff: true,
+      reasoningEffortLevels: ["high", "max"] as const,
+    };
+  }
   if (normalizedProvider === "gemini") {
     // Custom Gemini OAI-compat gateways (LiteLLM, proxies) route
     // through /chat/completions which drops the Gemini-native
