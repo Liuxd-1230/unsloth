@@ -982,6 +982,34 @@ class ExternalProviderClient:
                 yield line
             return
 
+        # DeepSeek does NOT have built-in web search. When the user
+        # enables web_search, we use standard OpenAI function calling:
+        # send a tool schema, collect tool_calls from the response,
+        # execute them locally via execute_tool(), and make a second
+        # API call with the results.
+        # https://api-docs.deepseek.com/zh-cn/guides/tool_use
+        if (
+            self.provider_type == "deepseek"
+            and not tool_choice_disabled
+            and enabled_tools
+            and "web_search" in enabled_tools
+        ):
+            async for line in self._stream_deepseek_with_tools(
+                messages,
+                model,
+                temperature,
+                top_p,
+                max_tokens,
+                presence_penalty,
+                enable_thinking,
+                reasoning_effort,
+                enabled_tools,
+                tools,
+                tool_choice,
+            ):
+                yield line
+            return
+
         body: dict[str, Any] = {
             "model": model,
             "messages": messages,
@@ -1028,6 +1056,18 @@ class ExternalProviderClient:
                 tpl_kw = {}
             tpl_kw["enable_thinking"] = bool(enable_thinking)
             body["chat_template_kwargs"] = tpl_kw
+
+        # DeepSeek thinking mode: uses `thinking` field (same shape as Kimi)
+        # and `reasoning_effort` for intensity control.
+        # https://api-docs.deepseek.com/zh-cn/guides/thinking_mode
+        if self.provider_type == "deepseek":
+            if enable_thinking is not None:
+                if enable_thinking:
+                    body["thinking"] = {"type": "enabled"}
+                else:
+                    body["thinking"] = {"type": "disabled"}
+            if reasoning_effort in ("high", "max"):
+                body["reasoning_effort"] = reasoning_effort
 
         # OpenRouter's unified `reasoning` field gates per-model thinking.
         # Some routes (`*_MANDATORY_REASONING_MODELS`) 400 on explicit off.
@@ -1716,6 +1756,355 @@ class ExternalProviderClient:
             yield _error_sse_line(
                 502,
                 f"Error communicating with kimi: {exc}",
+                self.provider_type,
+            )
+
+    async def _stream_deepseek_with_tools(
+        self,
+        messages: list[dict[str, Any]],
+        model: str,
+        temperature: float,
+        top_p: float,
+        max_tokens: Optional[int],
+        presence_penalty: float,
+        enable_thinking: Optional[bool],
+        reasoning_effort: Optional[str],
+        enabled_tools: Optional[list[str]],
+        tools: Optional[list[dict[str, Any]]] = None,
+        tool_choice: Optional[Any] = None,
+    ) -> AsyncGenerator[str, None]:
+        """
+        DeepSeek 2-call tool execution round-trip for web_search.
+
+        DeepSeek supports standard OpenAI function calling but does NOT
+        have built-in web search. When web_search is enabled:
+          1. First API call with web_search tool schema.
+          2. Collect tool_calls from the streaming response.
+          3. Execute tool_calls locally via execute_tool().
+          4. Second API call with tool results appended to messages.
+          5. Stream the final response back.
+
+        https://api-docs.deepseek.com/zh-cn/guides/tool_use
+        """
+        from core.inference.tools import WEB_SEARCH_TOOL, execute_tool
+
+        url = f"{self.base_url}/chat/completions"
+
+        # Build the first request body.
+        body: dict[str, Any] = {
+            "model": model,
+            "messages": messages,
+            "stream": True,
+            "temperature": temperature,
+            "top_p": top_p,
+            "presence_penalty": presence_penalty,
+        }
+        if max_tokens is not None:
+            body["max_tokens"] = max_tokens
+
+        # DeepSeek thinking mode
+        if enable_thinking is not None:
+            if enable_thinking:
+                body["thinking"] = {"type": "enabled"}
+            else:
+                body["thinking"] = {"type": "disabled"}
+        if reasoning_effort in ("high", "max"):
+            body["reasoning_effort"] = reasoning_effort
+
+        # Strip body fields the registry declares unusable
+        from core.inference.providers import get_provider_info
+
+        provider_info = get_provider_info(self.provider_type) or {}
+        for field in provider_info.get("body_omit", ()):
+            body.pop(field, None)
+
+        # Attach the web_search tool schema. Also include any
+        # user-declared tools so the model can call them too.
+        first_call_tools: list[dict[str, Any]] = [WEB_SEARCH_TOOL]
+        if tools:
+            first_call_tools.extend(tools)
+        body["tools"] = first_call_tools
+        if tool_choice is not None:
+            body["tool_choice"] = tool_choice
+
+        synthetic_id = f"chatcmpl-{self.provider_type}-deepseek-tools"
+
+        def _synthetic_chunk(payload: dict[str, Any]) -> str:
+            chunk = {
+                "id": synthetic_id,
+                "object": "chat.completion.chunk",
+                "choices": [{"index": 0, "delta": {}, "finish_reason": None}],
+                "_toolEvent": payload,
+            }
+            return f"data: {_json.dumps(chunk)}"
+
+        logger.info(
+            "DeepSeek tools round-trip starting (model=%s, url=%s)",
+            model,
+            url,
+        )
+
+        # ---- First call: collect tool_calls from streaming response ----
+        tool_calls_acc: dict[int, dict[str, Any]] = {}
+        try:
+            async with _http_client.stream(
+                "POST",
+                url,
+                json=body,
+                headers=self._auth_headers(),
+                timeout=self._stream_timeout,
+            ) as response:
+                if response.status_code != 200:
+                    error_body = await response.aread()
+                    error_text = error_body.decode("utf-8", errors="replace")
+                    logger.error(
+                        "DeepSeek first-call returned %d: %s",
+                        response.status_code,
+                        error_text[:500],
+                    )
+                    yield _error_sse_line(
+                        response.status_code, error_text, self.provider_type
+                    )
+                    return
+
+                lines_gen = response.aiter_lines().__aiter__()
+                try:
+                    while True:
+                        try:
+                            line = await lines_gen.__anext__()
+                        except StopAsyncIteration:
+                            break
+                        if not line.strip() or not line.startswith("data:"):
+                            continue
+                        data_str = line[len("data:"):].strip()
+                        if data_str == "[DONE]":
+                            break
+                        try:
+                            parsed = _json.loads(data_str)
+                        except Exception:
+                            continue
+                        for choice in parsed.get("choices") or []:
+                            if not isinstance(choice, dict):
+                                continue
+                            delta = choice.get("delta") or {}
+                            for tc in delta.get("tool_calls") or []:
+                                if not isinstance(tc, dict):
+                                    continue
+                                idx = tc.get("index", 0)
+                                slot = tool_calls_acc.setdefault(
+                                    idx,
+                                    {
+                                        "id": tc.get("id") or f"call_{idx}",
+                                        "type": "function",
+                                        "function": {"name": "", "arguments": ""},
+                                    },
+                                )
+                                if tc.get("id"):
+                                    slot["id"] = tc["id"]
+                                fn = tc.get("function") or {}
+                                if fn.get("name"):
+                                    slot["function"]["name"] = fn["name"]
+                                if fn.get("arguments"):
+                                    slot["function"]["arguments"] += fn["arguments"]
+                            if choice.get("finish_reason") == "tool_calls":
+                                break
+                except GeneratorExit:
+                    await response.aclose()
+                    await lines_gen.aclose()
+                    raise
+                finally:
+                    await response.aclose()
+                    await lines_gen.aclose()
+        except httpx.HTTPError as exc:
+            logger.error("DeepSeek first-call HTTP error: %s", exc)
+            yield _error_sse_line(
+                502,
+                f"Error communicating with deepseek: {exc}",
+                self.provider_type,
+            )
+            return
+
+        # If the model didn't emit any tool_calls, fall back to a plain
+        # streaming call without tools. This mirrors the Kimi pattern:
+        # if the model decides not to use tools, just stream normally.
+        if not tool_calls_acc:
+            logger.info(
+                "DeepSeek tools: model did not invoke any tools; "
+                "falling back to plain stream"
+            )
+            fallback_body = dict(body)
+            fallback_body.pop("tools", None)
+            fallback_body.pop("tool_choice", None)
+            try:
+                async with _http_client.stream(
+                    "POST",
+                    url,
+                    json=fallback_body,
+                    headers=self._auth_headers(),
+                    timeout=self._stream_timeout,
+                ) as response:
+                    if response.status_code != 200:
+                        error_body = await response.aread()
+                        error_text = error_body.decode("utf-8", errors="replace")
+                        logger.error(
+                            "DeepSeek fallback returned %d: %s",
+                            response.status_code,
+                            error_text[:500],
+                        )
+                        yield _error_sse_line(
+                            response.status_code, error_text, self.provider_type
+                        )
+                        return
+                    lines_gen = response.aiter_lines().__aiter__()
+                    try:
+                        while True:
+                            try:
+                                line = await lines_gen.__anext__()
+                            except StopAsyncIteration:
+                                break
+                            if line.strip():
+                                yield line
+                    except GeneratorExit:
+                        await response.aclose()
+                        await lines_gen.aclose()
+                        raise
+                    finally:
+                        await response.aclose()
+                        await lines_gen.aclose()
+            except httpx.HTTPError as exc:
+                logger.error("DeepSeek fallback HTTP error: %s", exc)
+                yield _error_sse_line(
+                    502,
+                    f"Error communicating with deepseek: {exc}",
+                    self.provider_type,
+                )
+            return
+
+        # ---- Execute tool_calls locally ----
+        tool_results: list[dict[str, Any]] = []
+        for tc in tool_calls_acc.values():
+            tool_name = tc["function"]["name"]
+            tool_call_id = tc["id"]
+            raw_args_str = tc["function"]["arguments"] or "{}"
+            try:
+                arguments = _json.loads(raw_args_str)
+            except Exception:
+                arguments = {"raw": raw_args_str}
+
+            # Emit tool_start so the UI shows the search card
+            yield _synthetic_chunk(
+                {
+                    "type": "tool_start",
+                    "tool_name": tool_name,
+                    "tool_call_id": tool_call_id,
+                    "arguments": arguments,
+                }
+            )
+
+            logger.info(
+                "DeepSeek tools: executing %s locally (call_id=%s, args=%s)",
+                tool_name,
+                tool_call_id,
+                raw_args_str[:200],
+            )
+
+            result = execute_tool(tool_name, arguments)
+
+            # Emit tool_end with the result
+            yield _synthetic_chunk(
+                {
+                    "type": "tool_end",
+                    "tool_name": tool_name,
+                    "tool_call_id": tool_call_id,
+                    "result": result,
+                }
+            )
+
+            tool_results.append(
+                {
+                    "role": "tool",
+                    "tool_call_id": tool_call_id,
+                    "name": tool_name,
+                    "content": result,
+                }
+            )
+
+        # ---- Second call: stream final answer with tool results ----
+        assistant_msg = {
+            "role": "assistant",
+            "content": "",
+            "tool_calls": list(tool_calls_acc.values()),
+        }
+        followup_body = dict(body)
+        followup_body["messages"] = (
+            list(messages) + [assistant_msg] + tool_results
+        )
+        followup_body["stream_options"] = {"include_usage": True}
+
+        try:
+            async with _http_client.stream(
+                "POST",
+                url,
+                json=followup_body,
+                headers=self._auth_headers(),
+                timeout=self._stream_timeout,
+            ) as response:
+                if response.status_code != 200:
+                    error_body = await response.aread()
+                    error_text = error_body.decode("utf-8", errors="replace")
+                    logger.error(
+                        "DeepSeek second-call returned %d: %s",
+                        response.status_code,
+                        error_text[:500],
+                    )
+                    yield _error_sse_line(
+                        response.status_code, error_text, self.provider_type
+                    )
+                    return
+
+                lines_gen = response.aiter_lines().__aiter__()
+                last_usage: Optional[dict[str, Any]] = None
+                try:
+                    while True:
+                        try:
+                            line = await lines_gen.__anext__()
+                        except StopAsyncIteration:
+                            break
+                        if not line.strip():
+                            continue
+                        if line.startswith("data:"):
+                            data_str = line[len("data:"):].strip()
+                            if data_str and data_str != "[DONE]":
+                                try:
+                                    parsed = _json.loads(data_str)
+                                except Exception:
+                                    parsed = None
+                                if isinstance(parsed, dict):
+                                    usage = parsed.get("usage")
+                                    if isinstance(usage, dict):
+                                        last_usage = usage
+                        yield line
+                except GeneratorExit:
+                    await response.aclose()
+                    await lines_gen.aclose()
+                    raise
+                finally:
+                    logger.info(
+                        "DeepSeek tools round-trip complete (model=%s, "
+                        "tools_executed=%d, prompt_tokens=%s, "
+                        "completion_tokens=%s)",
+                        model,
+                        len(tool_results),
+                        (last_usage or {}).get("prompt_tokens"),
+                        (last_usage or {}).get("completion_tokens"),
+                    )
+                    await response.aclose()
+                    await lines_gen.aclose()
+        except httpx.HTTPError as exc:
+            logger.error("DeepSeek second-call HTTP error: %s", exc)
+            yield _error_sse_line(
+                502,
+                f"Error communicating with deepseek: {exc}",
                 self.provider_type,
             )
 
